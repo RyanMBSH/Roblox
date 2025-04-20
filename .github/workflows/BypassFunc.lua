@@ -9,52 +9,51 @@ function SegLib.spoofFunc(funcName)
         return SegLib._cache[funcName]
     end
 
-    local function validateAndCache(name, func)
-        if typeof(func) == "function" then
-            -- teste rápido: tentar chamar (sem argumentos)
-            local ok = pcall(function() func() end)
-            if ok then
-                SegLib._cache[name] = func
-                return func
-            end
+    local function checkAndReturn(f)
+        if typeof(f) == "function" then
+            SegLib._cache[funcName] = f
+            return f
         end
     end
 
-    -- Tenta diretamente pelo getrenv (mais confiável)
-    local env = getrenv and getrenv()
-    if env and env[funcName] and typeof(env[funcName]) == "function" then
-        return validateAndCache(funcName, env[funcName])
-    end
-
-    -- Tenta em outros ambientes
-    local sources = {
+    -- 1. Checar ambientes seguros
+    local envs = {
+        getrenv and getrenv(),
         getgenv and getgenv(),
         getfenv and getfenv(0),
         shared,
         _G
     }
 
-    for _, env in ipairs(sources) do
+    for _, env in ipairs(envs) do
         if type(env) == "table" then
-            for k, v in pairs(env) do
-                if typeof(v) == "function" and tostring(k):lower():find(funcName:lower()) then
-                    return validateAndCache(funcName, v)
+            for name, func in pairs(env) do
+                if typeof(func) == "function" and tostring(name):lower():find(funcName:lower()) then
+                    return checkAndReturn(func)
                 end
             end
         end
     end
 
-    -- Debug registry (último recurso)
+    -- 2. Procurar diretamente no registry
     if debug and debug.getregistry then
         for _, v in pairs(debug.getregistry()) do
             if typeof(v) == "function" and tostring(v):lower():find(funcName:lower()) then
-                return validateAndCache(funcName, v)
+                return checkAndReturn(v)
             end
         end
     end
 
-    warn("[SegLib] ❌ Função '" .. funcName .. "' não foi encontrada ou não pode ser executada.")
-    return function() end
+    -- 3. Tentar diretamente
+    local ok, direct = pcall(function()
+        return getfenv(0)[funcName]
+    end)
+    if ok and typeof(direct) == "function" then
+        return checkAndReturn(direct)
+    end
+
+    -- 4. Não encontrado
+    error("[SegLib] ❌ Função '" .. funcName .. "' não foi encontrada em nenhum ambiente válido.")
 end
 
 -- Executa uma função protegida, checando ambiente
