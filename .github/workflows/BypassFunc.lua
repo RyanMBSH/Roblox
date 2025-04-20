@@ -3,16 +3,34 @@ local SegLib = {}
 
 -- Protege e encapsula qualquer função nativa original
 function SegLib.spoofFunc(funcName)
-    local env = getrenv and getrenv() or getfenv(0)
-    for k, v in pairs(env) do
-        if typeof(v) == "function" and tostring(k):lower():find(funcName:lower()) then
-            return newcclosure(function(...)
-                return v(...)
-            end)
+    -- Primeiro: verifica se já foi spoofado antes
+    if SegLib[funcName] and typeof(SegLib[funcName]) == "function" then
+        return SegLib[funcName]
+    end
+
+    -- Tentativa 1: diretamente pelo environment global
+    local sources = {getgenv and getgenv(), getrenv and getrenv(), getfenv and getfenv(0), shared}
+    for _, env in ipairs(sources) do
+        if type(env) == "table" then
+            for k, v in pairs(env) do
+                if typeof(v) == "function" and tostring(k):lower():find(funcName:lower()) then
+                    SegLib[funcName] = newcclosure(function(...) return v(...) end)
+                    return SegLib[funcName]
+                end
+            end
         end
     end
-    warn("[SegLib] Função '" .. funcName .. "' não encontrada.")
-    return function() end -- retorna dummy seguro
+
+    -- Tentativa 2: varredura por namecall
+    local success, f = pcall(function() return firetouchinterest end)
+    if success and typeof(f) == "function" then
+        SegLib[funcName] = newcclosure(function(...) return f(...) end)
+        return SegLib[funcName]
+    end
+
+    -- Falha final: retorna dummy seguro
+    warn("[SegLib] Função '" .. funcName .. "' não encontrada em nenhum ambiente.")
+    return function() end
 end
 
 -- Executa uma função protegida, checando ambiente
