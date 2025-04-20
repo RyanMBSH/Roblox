@@ -1,9 +1,6 @@
 --// SegLib (Secure Execution Library)
 local SegLib = {}
 
--- Protege e encapsula qualquer função nativa original
-local SegLib = {}
-
 -- Armazena funções já encontradas
 SegLib._cache = {}
 
