@@ -63,7 +63,4 @@ function SegLib.isSafe(func)
     return iscallerclosure and iscallerclosure(func)
 end
 
--- Exemplo de uso automático com firetouchinterest
-SegLib.firetouch = SegLib.spoofFunc("firetouchinterest")
-
 return SegLib
