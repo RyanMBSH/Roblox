@@ -9,41 +9,51 @@ function SegLib.spoofFunc(funcName)
         return SegLib._cache[funcName]
     end
 
+    -- Função auxiliar para validar e armazenar
+    local function validateAndCache(name, func)
+        if typeof(func) == "function" then
+            SegLib._cache[name] = func
+            return func
+        end
+    end
+
     -- 1ª tentativa: ambientes conhecidos
-    local sources = {getgenv and getgenv(), getrenv and getrenv(), getfenv and getfenv(0), shared, _G}
+    local sources = {
+        getgenv and getgenv(),
+        getrenv and getrenv(),
+        getfenv and getfenv(0),
+        shared,
+        _G
+    }
+
     for _, env in ipairs(sources) do
         if type(env) == "table" then
             for k, v in pairs(env) do
                 if typeof(v) == "function" and tostring(k):lower():find(funcName:lower()) then
-                    local secured = newcclosure(function(...) return v(...) end)
-                    SegLib._cache[funcName] = secured
-                    return secured
+                    return validateAndCache(funcName, v)
                 end
             end
         end
     end
 
-    -- 2ª tentativa: checagem de variáveis locais via debug
+    -- 2ª tentativa: getregistry
     if debug and debug.getregistry then
         for _, v in pairs(debug.getregistry()) do
             if typeof(v) == "function" and tostring(v):lower():find(funcName:lower()) then
-                local secured = newcclosure(function(...) return v(...) end)
-                SegLib._cache[funcName] = secured
-                return secured
+                return validateAndCache(funcName, v)
             end
         end
     end
 
-    -- 3ª tentativa: tentar acesso direto
-    local suc, direct = pcall(function() return getfenv(0)[funcName] end)
-    if suc and typeof(direct) == "function" then
-        local secured = newcclosure(function(...) return direct(...) end)
-        SegLib._cache[funcName] = secured
-        return secured
+    -- 3ª tentativa: acesso direto ao fenv
+    local suc, direct = pcall(function()
+        return getfenv(0)[funcName]
+    end)
+    if suc then
+        return validateAndCache(funcName, direct)
     end
 
-    -- Se ainda não encontrou, retorna dummy
-    warn("[SegLib] Função '" .. funcName .. "' não encontrada.")
+    warn("[SegLib] ⚠️ Função '" .. funcName .. "' não encontrada.")
     return function() end
 end
 
