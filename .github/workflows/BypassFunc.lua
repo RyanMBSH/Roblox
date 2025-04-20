@@ -2,37 +2,53 @@
 local SegLib = {}
 
 -- Protege e encapsula qualquer função nativa original
+local SegLib = {}
+
+-- Armazena funções já encontradas
+SegLib._cache = {}
+
 function SegLib.spoofFunc(funcName)
-    -- Primeiro: verifica se já foi spoofado antes
-    if SegLib[funcName] and typeof(SegLib[funcName]) == "function" then
-        return SegLib[funcName]
+    if SegLib._cache[funcName] then
+        return SegLib._cache[funcName]
     end
 
-    -- Tentativa 1: diretamente pelo environment global
-    local sources = {getgenv and getgenv(), getrenv and getrenv(), getfenv and getfenv(0), shared}
+    -- 1ª tentativa: ambientes conhecidos
+    local sources = {getgenv and getgenv(), getrenv and getrenv(), getfenv and getfenv(0), shared, _G}
     for _, env in ipairs(sources) do
         if type(env) == "table" then
             for k, v in pairs(env) do
                 if typeof(v) == "function" and tostring(k):lower():find(funcName:lower()) then
-                    SegLib[funcName] = newcclosure(function(...) return v(...) end)
-                    return SegLib[funcName]
+                    local secured = newcclosure(function(...) return v(...) end)
+                    SegLib._cache[funcName] = secured
+                    return secured
                 end
             end
         end
     end
 
-    -- Tentativa 2: varredura por namecall
-    local success, f = pcall(function() return firetouchinterest end)
-    if success and typeof(f) == "function" then
-        SegLib[funcName] = newcclosure(function(...) return f(...) end)
-        return SegLib[funcName]
+    -- 2ª tentativa: checagem de variáveis locais via debug
+    if debug and debug.getregistry then
+        for _, v in pairs(debug.getregistry()) do
+            if typeof(v) == "function" and tostring(v):lower():find(funcName:lower()) then
+                local secured = newcclosure(function(...) return v(...) end)
+                SegLib._cache[funcName] = secured
+                return secured
+            end
+        end
     end
 
-    -- Falha final: retorna dummy seguro
-    warn("[SegLib] Função '" .. funcName .. "' não encontrada em nenhum ambiente.")
+    -- 3ª tentativa: tentar acesso direto
+    local suc, direct = pcall(function() return getfenv(0)[funcName] end)
+    if suc and typeof(direct) == "function" then
+        local secured = newcclosure(function(...) return direct(...) end)
+        SegLib._cache[funcName] = secured
+        return secured
+    end
+
+    -- Se ainda não encontrou, retorna dummy
+    warn("[SegLib] Função '" .. funcName .. "' não encontrada.")
     return function() end
 end
-
 -- Executa uma função protegida, checando ambiente
 function SegLib.secureCall(func, ...)
     if typeof(func) ~= "function" then
