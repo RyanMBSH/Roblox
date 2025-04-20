@@ -9,18 +9,26 @@ function SegLib.spoofFunc(funcName)
         return SegLib._cache[funcName]
     end
 
-    -- Função auxiliar para validar e armazenar
     local function validateAndCache(name, func)
         if typeof(func) == "function" then
-            SegLib._cache[name] = func
-            return func
+            -- teste rápido: tentar chamar (sem argumentos)
+            local ok = pcall(function() func() end)
+            if ok then
+                SegLib._cache[name] = func
+                return func
+            end
         end
     end
 
-    -- 1ª tentativa: ambientes conhecidos
+    -- Tenta diretamente pelo getrenv (mais confiável)
+    local env = getrenv and getrenv()
+    if env and env[funcName] and typeof(env[funcName]) == "function" then
+        return validateAndCache(funcName, env[funcName])
+    end
+
+    -- Tenta em outros ambientes
     local sources = {
         getgenv and getgenv(),
-        getrenv and getrenv(),
         getfenv and getfenv(0),
         shared,
         _G
@@ -36,7 +44,7 @@ function SegLib.spoofFunc(funcName)
         end
     end
 
-    -- 2ª tentativa: getregistry
+    -- Debug registry (último recurso)
     if debug and debug.getregistry then
         for _, v in pairs(debug.getregistry()) do
             if typeof(v) == "function" and tostring(v):lower():find(funcName:lower()) then
@@ -45,15 +53,7 @@ function SegLib.spoofFunc(funcName)
         end
     end
 
-    -- 3ª tentativa: acesso direto ao fenv
-    local suc, direct = pcall(function()
-        return getfenv(0)[funcName]
-    end)
-    if suc then
-        return validateAndCache(funcName, direct)
-    end
-
-    warn("[SegLib] ⚠️ Função '" .. funcName .. "' não encontrada.")
+    warn("[SegLib] ❌ Função '" .. funcName .. "' não foi encontrada ou não pode ser executada.")
     return function() end
 end
 
