@@ -56,7 +56,13 @@ function SegLib.secureCall(func, ...)
         warn("[SegLib] secureCall bloqueada fora do script.")
         return
     end
-    return pcall(func, ...)
+
+    local co = coroutine.create(func)
+    local success, result = coroutine.resume(co, ...)
+    if not success then
+        warn("[SegLib] Erro na secureCall: " .. tostring(result))
+    end
+    return result
 end
 
 -- Seta uma propriedade de forma protegida (caso possível)
