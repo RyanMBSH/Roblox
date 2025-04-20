@@ -46,6 +46,7 @@ function SegLib.spoofFunc(funcName)
     warn("[SegLib] Função '" .. funcName .. "' não encontrada.")
     return function() end
 end
+
 -- Executa uma função protegida, checando ambiente
 function SegLib.secureCall(func, ...)
     if typeof(func) ~= "function" then
@@ -56,11 +57,9 @@ function SegLib.secureCall(func, ...)
         warn("[SegLib] secureCall bloqueada fora do script.")
         return
     end
-
-    local co = coroutine.create(func)
-    local success, result = coroutine.resume(co, ...)
+    local success, result = pcall(func, ...)
     if not success then
-        warn("[SegLib] Erro na secureCall: " .. tostring(result))
+        warn("[SegLib] Erro em secureCall: " .. tostring(result))
     end
     return result
 end
